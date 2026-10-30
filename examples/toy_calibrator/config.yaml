@@ -1,0 +1,42 @@
+dataset:
+  n_timesteps: 10_000
+  n_channels: 8
+  dt: 0.01
+  seed: 123
+  output_path: toy_timeseries.npz
+
+signal:
+  amplitude: 0.1
+  frequency: 1.0
+  phase: 0.0
+  offset: 1.2
+
+  amplitude_jitter_std: 0.005
+  frequency_jitter_std: 0.002
+  phase_jitter_std: 0.01
+  offset_jitter_std: 0.005
+
+noise:
+  mean: 0.1
+  std: 0.02
+
+snr:
+  epsilon: 1.0e-8
+  db: false
+  window_radius: 3
+
+anomaly:
+  single_channel_probability: 0.0005
+  single_channel_duration_poisson_lambda: 3
+
+  group_probability: 0.0001
+  group_channel_fraction: 0.5
+  group_duration_poisson_lambda: 8
+
+  snr_scale: 0.1
+
+plot:
+  output_path: toy_timeseries_plot.png
+  start_index: 0
+  end_index: 1000
+  channels: [0, 1, 2]
