@@ -9,6 +9,7 @@ description = "Minimal YAML-configured preprocessing core for time-series datase
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "matplotlib",
     "numpy",
     "PyYAML",
 ]
