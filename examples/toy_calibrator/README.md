@@ -9,19 +9,59 @@ not a realistic hardware simulator.
 ## Files
 
 - `generate_toy_timeseries.py` — generator script and small helper functions.
-- `config.yaml` — editable YAML configuration.
+- `config.yaml` — editable YAML configuration for data generation.
 - `toy_timeseries.npz` — generated NumPy archive, created when the script runs.
 - `toy_timeseries_plot.png` — generated plot, created when the script runs.
+- `loader.py` — custom example loader that converts the toy `.npz` file into a `BaseDataset`.
+- `register.py` — setup module that registers the custom loader as `toy_npz`.
+- `pipeline.yaml` — preprocessing config that selects `toy_npz` and the built-in `chronological` split.
 
-## Run
+## Quick start
 
-From the repository root:
+From the repository root, generate the toy data:
 
 ```bash
 python examples/toy_calibrator/generate_toy_timeseries.py
 ```
 
-The script reads:
+Then run the preprocessing pipeline:
+
+```bash
+python scripts/run_experiment.py \
+  --config examples/toy_calibrator/pipeline.yaml \
+  --setup examples.toy_calibrator.register
+```
+
+Expected output:
+
+```text
+train: (7000, 8, 4)
+val:   (1500, 8, 4)
+test:  (1500, 8, 4)
+```
+
+## Registration pattern
+
+The core framework is intentionally "batteries not included" for loaders. Custom loaders live in experiment code or private packages, then register themselves before a config is loaded.
+
+This example does that with:
+
+```bash
+--setup examples.toy_calibrator.register
+```
+
+The generic runner imports that module and calls its `register()` function. The setup module registers `loader.py` as `toy_npz`, which is the loader name used in `pipeline.yaml`:
+
+```yaml
+loader:
+  type: toy_npz
+```
+
+Multiple setup modules can be passed by repeating `--setup`, which lets separate packages register loaders, transforms, or split policies without changing the YAML schema.
+
+## Generate data only
+
+The generator script reads:
 
 ```text
 examples/toy_calibrator/config.yaml

@@ -1,0 +1,14 @@
+version: 1
+
+loader:
+  type: toy_npz
+  params:
+    path: examples/toy_calibrator/toy_timeseries.npz
+
+split:
+  policy: chronological
+  params:
+    ratios: [0.7, 0.15, 0.15]
+
+metadata:
+  dataset_name: toy_calibrator
