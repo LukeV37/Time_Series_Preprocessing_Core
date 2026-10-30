@@ -26,7 +26,9 @@ def select_time_rows(dataset: BaseDataset, keep_or_indices: Any) -> BaseDataset:
 
     result = BaseDataset(
         data=np.asarray(dataset.data)[selector].copy(),
-        timestamps=None if dataset.timestamps is None else np.asarray(dataset.timestamps)[selector].copy(),
+        timestamps=None
+        if dataset.timestamps is None
+        else np.asarray(dataset.timestamps)[selector].copy(),
         labels=None if dataset.labels is None else np.asarray(dataset.labels)[selector].copy(),
         channel_labels=None
         if dataset.channel_labels is None

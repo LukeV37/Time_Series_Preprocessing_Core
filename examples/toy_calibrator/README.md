@@ -14,7 +14,7 @@ not a realistic hardware simulator.
 - `toy_timeseries_plot.png` — generated plot, created when the script runs.
 - `loader.py` — custom example loader that converts the toy `.npz` file into a `BaseDataset`.
 - `register.py` — setup module that registers the custom loader as `toy_npz`.
-- `pipeline.yaml` — preprocessing config that selects `toy_npz` and the built-in `chronological` split.
+- `pipeline.yaml` — preprocessing config that selects `toy_npz`, built-in transforms, and the built-in `chronological` split.
 
 ## Quick start
 
@@ -58,6 +58,8 @@ loader:
 ```
 
 Multiple setup modules can be passed by repeating `--setup`, which lets separate packages register loaders, transforms, or split policies without changing the YAML schema.
+
+Built-in transforms are registered by the generic runner. This example uses `fill_nan` before splitting, then applies `repair_bollinger_outliers` to train/val only and `standard_scale` to train/val/test after fitting scaler state on train.
 
 ## Generate data only
 

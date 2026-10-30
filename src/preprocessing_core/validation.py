@@ -79,7 +79,9 @@ def validate_apply_and_fit(
         if fit != "train":
             raise ConfigError(f"{stage} transform {name!r} fit must be 'train', got {fit!r}")
         if "train" not in apply:
-            raise ConfigError(f"{stage} transform {name!r} has fit: train but does not apply to train")
+            raise ConfigError(
+                f"{stage} transform {name!r} has fit: train but does not apply to train"
+            )
 
 
 def validate_split_indices(

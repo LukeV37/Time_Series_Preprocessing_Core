@@ -10,6 +10,7 @@ from typing import Any
 
 from preprocessing_core import load_dataset_bundle
 from preprocessing_core.splits import register_builtin_split_policies
+from preprocessing_core.transforms import register_builtin_transforms
 
 
 def main() -> None:
@@ -18,6 +19,7 @@ def main() -> None:
     add_import_root(args.import_root)
 
     register_builtin_split_policies(replace=args.replace)
+    register_builtin_transforms(replace=args.replace)
     for setup_module in args.setup:
         register_setup_module(setup_module)
 
@@ -38,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--replace",
         action="store_true",
-        help="Allow built-in registration to replace existing registry names.",
+        help="Allow built-in split/transform registration to replace existing registry names.",
     )
     parser.add_argument(
         "--import-root",

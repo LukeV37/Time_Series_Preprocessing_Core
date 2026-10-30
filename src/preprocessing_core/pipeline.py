@@ -2,17 +2,49 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 from dataclasses import dataclass
+from typing import Any
 
-from preprocessing_core.config import PipelineConfig, load_config
+from preprocessing_core.config import PipelineConfig, TransformConfig, load_config
 from preprocessing_core.datasets import BaseDataset, DatasetBundle
-from preprocessing_core.registry import Loader, SplitPolicy, get_loader, get_split_policy
+from preprocessing_core.registry import (
+    Loader,
+    SplitPolicy,
+    Transform,
+    get_loader,
+    get_split_policy,
+    get_transform,
+)
 from preprocessing_core.selection import select_time_rows
-from preprocessing_core.validation import PipelineError, validate_split_indices
+from preprocessing_core.validation import (
+    PipelineError,
+    validate_split_indices,
+    validate_state_is_serializable,
+)
 
 LOGGER = logging.getLogger(__name__)
 SPLIT_ORDER = ("train", "val", "test")
+
+
+@dataclass
+class TransformStep:
+    """Resolved transform step ready for pipeline execution."""
+
+    stage: str
+    position: int
+    name: str
+    fn: Transform
+    params: dict[str, Any]
+    apply: tuple[str, ...]
+    fit: str | None
+    state_key: str
+
+    @property
+    def label(self) -> str:
+        """Return the provenance label recorded on transformed datasets."""
+        return f"{self.stage}:{self.position}:{self.name}"
 
 
 @dataclass
@@ -22,14 +54,17 @@ class PreprocessingPipeline:
     config: PipelineConfig
     loader: Loader | None = None
     split_policy: SplitPolicy | None = None
+    pre_split_steps: list[TransformStep] | None = None
+    post_split_steps: list[TransformStep] | None = None
+    fitted_state: dict[str, dict[str, object]] | None = None
 
     @classmethod
-    def from_yaml(cls, path: str) -> "PreprocessingPipeline":
+    def from_yaml(cls, path: str) -> PreprocessingPipeline:
         """Create a pipeline from a YAML config file."""
         return cls.from_config(load_config(path))
 
     @classmethod
-    def from_config(cls, config: PipelineConfig) -> "PreprocessingPipeline":
+    def from_config(cls, config: PipelineConfig) -> PreprocessingPipeline:
         """Create a pipeline from validated config and resolve registered callables."""
         config.validate()
         pipeline = cls(config=config)
@@ -37,14 +72,15 @@ class PreprocessingPipeline:
         return pipeline
 
     def resolve(self) -> None:
-        """Resolve configured loader and split policy names."""
+        """Resolve configured loader, transforms, and split policy names."""
         self.loader = get_loader(self.config.loader.type)
         self.split_policy = get_split_policy(self.config.split.policy)
+        self.pre_split_steps = _resolve_transform_steps(self.config.pre_split, stage="pre_split")
+        self.post_split_steps = _resolve_transform_steps(self.config.post_split, stage="post_split")
 
     def build(self) -> DatasetBundle:
         """Run the configured one-load preprocessing pipeline."""
-        if self.config.pre_split or self.config.post_split:
-            raise NotImplementedError("Pipeline transforms are not implemented yet")
+        self.fitted_state = {}
 
         LOGGER.info(
             "Starting preprocessing build with loader %r and split policy %r",
@@ -53,7 +89,9 @@ class PreprocessingPipeline:
         )
 
         full = self._load_dataset()
+        full = self._run_pre_split_transforms(full)
         splits = self._split_dataset(full)
+        splits = self._run_post_split_transforms(splits)
         bundle = self._make_output(splits)
 
         LOGGER.info(
@@ -80,6 +118,13 @@ class PreprocessingPipeline:
         dataset.validate()
         LOGGER.debug("Loaded dataset with shape %s", dataset.shape)
         return dataset
+
+    def _run_pre_split_transforms(self, dataset: BaseDataset) -> BaseDataset:
+        """Run full-dataset transforms before split indices are computed."""
+        result = dataset
+        for step in self.pre_split_steps or []:
+            result = self._run_transform_step(result, step, state={}, fit=False)
+        return result
 
     def _split_dataset(self, full: BaseDataset) -> dict[str, BaseDataset]:
         """Run the configured split policy and materialize split datasets."""
@@ -109,11 +154,94 @@ class PreprocessingPipeline:
         )
         return splits
 
+    def _run_post_split_transforms(self, splits: dict[str, BaseDataset]) -> dict[str, BaseDataset]:
+        """Run split-specific transforms in deterministic train/val/test order."""
+        for step in self.post_split_steps or []:
+            state = self._state_for_step(step)
+            for split_name in SPLIT_ORDER:
+                if split_name not in step.apply:
+                    continue
+                splits[split_name] = self._run_transform_step(
+                    splits[split_name],
+                    step,
+                    state=state,
+                    fit=step.fit == split_name,
+                    split_name=split_name,
+                )
+            if step.fit is not None:
+                validate_state_is_serializable(state, context=f"state for {step.label}")
+        return splits
+
+    def _run_transform_step(
+        self,
+        dataset: BaseDataset,
+        step: TransformStep,
+        *,
+        state: dict[str, object],
+        fit: bool,
+        split_name: str | None = None,
+    ) -> BaseDataset:
+        """Run one transform with validation and error context."""
+        original_split = dataset.split
+        original_data_tag = dataset.data_tag
+        context = _transform_context(step, split_name=split_name)
+
+        try:
+            result = step.fn(dataset, state=state, fit=fit, **step.params)
+        except Exception as exc:
+            raise PipelineError(f"{context} failed") from exc
+
+        if not isinstance(result, BaseDataset):
+            raise PipelineError(f"{context} did not return BaseDataset")
+
+        result.split = original_split
+        result.data_tag = original_data_tag
+        result.preprocess_steps = list(dataset.preprocess_steps) + [step.label]
+        result.validate()
+        return result
+
+    def _state_for_step(self, step: TransformStep) -> dict[str, object]:
+        """Return the mutable state dict for one post-split transform step."""
+        if self.fitted_state is None:
+            raise PipelineError("Pipeline fitted state has not been initialized")
+        if step.fit is None:
+            return {}
+        return self.fitted_state.setdefault(step.state_key, {})
+
     def _make_output(self, splits: dict[str, BaseDataset]) -> DatasetBundle:
         """Return the final dataset bundle."""
+        metadata = dict(self.config.metadata)
+        metadata["fitted_state"] = copy.deepcopy(self.fitted_state or {})
         return DatasetBundle(
             train=splits["train"],
             val=splits["val"],
             test=splits["test"],
-            metadata=dict(self.config.metadata),
+            metadata=metadata,
         )
+
+
+def _resolve_transform_steps(configs: list[TransformConfig], *, stage: str) -> list[TransformStep]:
+    """Resolve transform configs into executable steps."""
+    steps = []
+    for position, config in enumerate(configs):
+        apply = config.apply or SPLIT_ORDER
+        steps.append(
+            TransformStep(
+                stage=stage,
+                position=position,
+                name=config.name,
+                fn=get_transform(config.name),
+                params=dict(config.params),
+                apply=apply,
+                fit=config.fit,
+                state_key=config.state_key or f"{stage}:{position}:{config.name}",
+            )
+        )
+    return steps
+
+
+def _transform_context(step: TransformStep, *, split_name: str | None) -> str:
+    """Return a concise human-readable transform context."""
+    if split_name is None:
+        return f"{step.stage} transform {step.name!r}"
+    return f"{step.stage} transform {step.name!r} on split {split_name!r}"

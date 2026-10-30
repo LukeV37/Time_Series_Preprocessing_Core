@@ -8,6 +8,7 @@ from preprocessing_core.registry import (
     register_split_policy,
     register_transform,
 )
+from preprocessing_core.transforms import register_builtin_transforms
 from preprocessing_core.validation import ConfigError, PipelineError
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "load_config",
     "load_dataset_bundle",
     "parse_config_dict",
+    "register_builtin_transforms",
     "register_loader",
     "register_split_policy",
     "register_transform",

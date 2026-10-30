@@ -5,10 +5,28 @@ loader:
   params:
     path: examples/toy_calibrator/toy_timeseries.npz
 
+pre_split:
+  - name: fill_nan
+    params:
+      value: 0.0
+
 split:
   policy: chronological
   params:
     ratios: [0.7, 0.15, 0.15]
+
+post_split:
+  - name: repair_bollinger_outliers
+    apply: [train, val]
+    params:
+      window: 25
+      n_bands: 3.0
+      min_periods: 5
+
+  - name: standard_scale
+    fit: train
+    apply: [train, val, test]
+    state_key: standard_scale
 
 metadata:
   dataset_name: toy_calibrator

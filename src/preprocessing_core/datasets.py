@@ -31,7 +31,7 @@ class BaseDataset:
 
         validate_dataset(self)
 
-    def copy(self) -> "BaseDataset":
+    def copy(self) -> BaseDataset:
         """Return a non-aliased copy safe for split-specific mutation."""
         return BaseDataset(
             data=np.array(self.data, copy=True),
@@ -48,7 +48,7 @@ class BaseDataset:
             preprocess_steps=list(self.preprocess_steps),
         )
 
-    def with_split(self, split: str, data_tag: str | None = None) -> "BaseDataset":
+    def with_split(self, split: str, data_tag: str | None = None) -> BaseDataset:
         """Return a copy tagged with orchestrator-owned split fields."""
         result = self.copy()
         result.split = split

@@ -48,7 +48,9 @@ def chronological_split(
     return splits
 
 
-def _validate_ratios(ratios: list[float] | tuple[float, float, float]) -> tuple[float, float, float]:
+def _validate_ratios(
+    ratios: list[float] | tuple[float, float, float],
+) -> tuple[float, float, float]:
     """Return validated train/val/test ratios."""
     if len(ratios) != 3:
         raise ConfigError("chronological split ratios must contain exactly three values")
