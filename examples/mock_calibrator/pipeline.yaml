@@ -3,7 +3,7 @@ version: 1
 loader:
   type: mock_calibrator_npz
   params:
-    path: examples/mock_calibrator/toy_timeseries.npz
+    path: examples/mock_calibrator/src/toy_timeseries.npz
 
 pre_split:
   - name: fill_nan
