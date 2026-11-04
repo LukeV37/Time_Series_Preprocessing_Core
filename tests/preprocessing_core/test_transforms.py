@@ -5,7 +5,7 @@ from preprocessing_core.datasets import BaseDataset
 from preprocessing_core.transforms import (
     fill_nan,
     register_builtin_transforms,
-    repair_bollinger_outliers,
+    repair_rolling_outliers,
     standard_scale,
 )
 from preprocessing_core.validation import ConfigError, PipelineError
@@ -51,39 +51,39 @@ def test_standard_scale_requires_state_when_not_fit() -> None:
         standard_scale(BaseDataset(data=np.ones((2, 1, 1))), state={}, fit=False)
 
 
-def test_repair_bollinger_outliers_uses_trailing_history() -> None:
+def test_repair_rolling_outliers_uses_trailing_history() -> None:
     dataset = BaseDataset(data=np.array([1.0, 1.0, 1.0, 10.0]).reshape(4, 1, 1))
 
-    result = repair_bollinger_outliers(
+    result = repair_rolling_outliers(
         dataset,
         state={},
         fit=False,
         window=3,
-        n_bands=2.0,
+        sigma=2.0,
         min_periods=3,
     )
 
     assert result.data[:, 0, 0].tolist() == [1.0, 1.0, 1.0, 10.0]
 
 
-def test_repair_bollinger_outliers_repairs_nonzero_band_outlier() -> None:
+def test_repair_rolling_outliers_repairs_nonzero_sigma_outlier() -> None:
     dataset = BaseDataset(data=np.array([1.0, 2.0, 1.0, 20.0]).reshape(4, 1, 1))
 
-    result = repair_bollinger_outliers(
+    result = repair_rolling_outliers(
         dataset,
         state={},
         fit=False,
         window=3,
-        n_bands=2.0,
+        sigma=2.0,
         min_periods=3,
     )
 
     assert result.data[3, 0, 0] == pytest.approx(4.0 / 3.0)
 
 
-def test_repair_bollinger_outliers_validates_params() -> None:
+def test_repair_rolling_outliers_validates_params() -> None:
     with pytest.raises(ConfigError, match="window"):
-        repair_bollinger_outliers(
+        repair_rolling_outliers(
             BaseDataset(data=np.ones((3, 1, 1))),
             state={},
             fit=False,
