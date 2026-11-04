@@ -76,7 +76,41 @@ class SplitConfig:
 
 @dataclass
 class PipelineConfig:
-    """Validated user configuration for one preprocessing pipeline."""
+    """Validated configuration for one preprocessing pipeline.
+
+    This dataclass is the typed representation of a parsed YAML
+    preprocessing config. It records the loader, split policy, optional
+    transform stages, and user metadata consumed by
+    :class:`preprocessing_core.pipeline.PreprocessingPipeline`.
+
+    Attributes
+    ----------
+    version : int
+        Configuration schema version. Currently only ``1`` is supported.
+    loader : LoaderConfig
+        Loader name and keyword parameters used to construct the full
+        dataset.
+    split : SplitConfig
+        Split policy name and keyword parameters used to produce the
+        ``train``, ``val``, and ``test`` indices.
+    pre_split : list[TransformConfig]
+        Transform steps applied to the full dataset before split indices are
+        computed.
+    post_split : list[TransformConfig]
+        Transform steps applied after split datasets are materialized.
+    metadata : dict[str, Any]
+        User-provided metadata copied into the final
+        :class:`preprocessing_core.datasets.DatasetBundle`.
+    config_path : str | None
+        Source path for the parsed config, when available. The default is
+        ``None``.
+
+    Raises
+    ------
+    ConfigError
+        Raised by :meth:`validate` when the schema version, metadata, loader,
+        split policy, or transform-stage constraints are invalid.
+    """
 
     version: int
     loader: LoaderConfig

@@ -11,7 +11,49 @@ import numpy as np
 
 @dataclass
 class BaseDataset:
-    """One full or split time-series dataset in canonical ``(T, C, F)`` form."""
+    """Canonical container for one full or split time-series dataset.
+
+    ``BaseDataset`` stores data in ``(T, C, F)`` form, where ``T`` is the
+    number of time rows, ``C`` is the number of channels, and ``F`` is the
+    number of features. Optional arrays and names are validated against these
+    dimensions so loaders, transforms, and split policies can share a common
+    dataset contract.
+
+    Attributes
+    ----------
+    data : np.ndarray
+        Time-series data with shape ``(T, C, F)``. ``T`` must be non-zero.
+    timestamps : np.ndarray | None
+        Optional time-aligned timestamps with shape ``(T,)``. The default is
+        ``None``.
+    labels : np.ndarray | None
+        Optional time-aligned labels with shape ``(T,)``. The default is
+        ``None``.
+    channel_labels : np.ndarray | None
+        Optional time- and channel-aligned labels with shape ``(T, C)``. The
+        default is ``None``.
+    channel_names : list[str] | None
+        Optional names for the ``C`` channels. The default is ``None``.
+    feature_names : list[str] | None
+        Optional names for the ``F`` features. The default is ``None``.
+    metadata : dict[str, Any]
+        Free-form dataset metadata. If ``metadata["aligned_time"]`` is set,
+        its values must be time-aligned with the first dimension ``T``.
+    split : str | None
+        Pipeline-owned split name, usually one of ``{"train", "val", "test"}``.
+        The default is ``None``.
+    data_tag : str | None
+        Optional pipeline-owned tag identifying the dataset source. The default
+        is ``None``.
+    preprocess_steps : list[str]
+        Provenance labels for preprocessing steps applied to this dataset.
+
+    Raises
+    ------
+    PipelineError
+        Raised by :meth:`validate` when data shape or aligned fields violate
+        the dataset contract.
+    """
 
     data: np.ndarray
     timestamps: np.ndarray | None = None
@@ -32,7 +74,15 @@ class BaseDataset:
         validate_dataset(self)
 
     def copy(self) -> BaseDataset:
-        """Return a non-aliased copy safe for split-specific mutation."""
+        """Return a non-aliased copy safe for split-specific mutation.
+
+        Returns
+        -------
+        BaseDataset
+            Deep copy of this dataset with arrays, lists, metadata, and
+            provenance copied so split-specific mutation does not alias the
+            source dataset.
+        """
         return BaseDataset(
             data=np.array(self.data, copy=True),
             timestamps=None if self.timestamps is None else np.array(self.timestamps, copy=True),
@@ -49,7 +99,14 @@ class BaseDataset:
         )
 
     def with_split(self, split: str, data_tag: str | None = None) -> BaseDataset:
-        """Return a copy tagged with orchestrator-owned split fields."""
+        """Return a copy tagged with orchestrator-owned split fields.
+
+        Returns
+        -------
+        BaseDataset
+            Copied dataset whose ``split`` and ``data_tag`` fields are set to
+            the provided values.
+        """
         result = self.copy()
         result.split = split
         result.data_tag = data_tag
@@ -73,7 +130,24 @@ class BaseDataset:
 
 @dataclass
 class DatasetBundle:
-    """Train/validation/test datasets plus shared preprocessing metadata."""
+    """Container for the canonical train, validation, and test datasets.
+
+    ``DatasetBundle`` is the final output of a preprocessing build. It groups
+    the three split datasets with metadata that applies to the bundle as a
+    whole, such as fitted transform state recorded by the pipeline.
+
+    Attributes
+    ----------
+    train : BaseDataset
+        Training split dataset.
+    val : BaseDataset
+        Validation split dataset.
+    test : BaseDataset
+        Test split dataset.
+    metadata : dict[str, Any]
+        Shared bundle-level metadata. Pipelines store fitted transform state
+        under ``metadata["fitted_state"]`` when applicable.
+    """
 
     train: BaseDataset
     val: BaseDataset
@@ -81,5 +155,11 @@ class DatasetBundle:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def splits(self) -> dict[str, BaseDataset]:
-        """Return split datasets keyed by split name."""
+        """Return split datasets keyed by split name.
+
+        Returns
+        -------
+        dict[str, BaseDataset]
+            Mapping with ``"train"``, ``"val"``, and ``"test"`` keys.
+        """
         return {"train": self.train, "val": self.val, "test": self.test}

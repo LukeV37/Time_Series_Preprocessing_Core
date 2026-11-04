@@ -49,7 +49,41 @@ class TransformStep:
 
 @dataclass
 class PreprocessingPipeline:
-    """Thin orchestrator for one configured preprocessing pipeline."""
+    """Orchestrator for one configured preprocessing build.
+
+    A pipeline loads the full dataset once, applies full-dataset transforms,
+    computes the train/validation/test split indices, materializes split
+    datasets, and then applies split-specific transforms in deterministic
+    ``train``, ``val``, ``test`` order. Fitted post-split transform state is
+    retained during the build and copied into the returned
+    :class:`preprocessing_core.datasets.DatasetBundle`.
+
+    Attributes
+    ----------
+    config : PipelineConfig
+        Validated pipeline configuration describing the loader, split policy,
+        transforms, and user metadata.
+    loader : Loader | None
+        Resolved loader callable. Set by :meth:`resolve`. The default is
+        ``None``.
+    split_policy : SplitPolicy | None
+        Resolved split policy callable. Set by :meth:`resolve`. The default is
+        ``None``.
+    pre_split_steps : list[TransformStep] | None
+        Resolved transform steps run before splitting. The default is ``None``.
+    post_split_steps : list[TransformStep] | None
+        Resolved transform steps run after splitting. The default is ``None``.
+    fitted_state : dict[str, dict[str, object]] | None
+        Mutable state captured for fitted post-split transforms during
+        :meth:`build`. The default is ``None``.
+
+    Raises
+    ------
+    PipelineError
+        Raised during :meth:`build` if registered callables are unresolved,
+        loading or transforms fail, a callable returns an invalid object, or
+        fitted transform state cannot be initialized or serialized.
+    """
 
     config: PipelineConfig
     loader: Loader | None = None
@@ -60,12 +94,26 @@ class PreprocessingPipeline:
 
     @classmethod
     def from_yaml(cls, path: str) -> PreprocessingPipeline:
-        """Create a pipeline from a YAML config file."""
+        """Create a pipeline from a YAML config file.
+
+        Returns
+        -------
+        PreprocessingPipeline
+            Pipeline initialized from the parsed config with registered
+            callables resolved.
+        """
         return cls.from_config(load_config(path))
 
     @classmethod
     def from_config(cls, config: PipelineConfig) -> PreprocessingPipeline:
-        """Create a pipeline from validated config and resolve registered callables."""
+        """Create a pipeline from validated config and resolve registered callables.
+
+        Returns
+        -------
+        PreprocessingPipeline
+            Pipeline initialized with ``config`` and resolved loader, split
+            policy, and transform callables.
+        """
         config.validate()
         pipeline = cls(config=config)
         pipeline.resolve()
@@ -79,7 +127,14 @@ class PreprocessingPipeline:
         self.post_split_steps = _resolve_transform_steps(self.config.post_split, stage="post_split")
 
     def build(self) -> DatasetBundle:
-        """Run the configured one-load preprocessing pipeline."""
+        """Run the configured one-load preprocessing pipeline.
+
+        Returns
+        -------
+        DatasetBundle
+            Train, validation, and test datasets plus bundle-level metadata,
+            including any fitted post-split transform state.
+        """
         self.fitted_state = {}
 
         LOGGER.info(
