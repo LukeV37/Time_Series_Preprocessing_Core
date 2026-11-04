@@ -80,8 +80,8 @@ class PipelineConfig:
 
     This dataclass is the typed representation of a parsed YAML
     preprocessing config. It records the loader, split policy, optional
-    transform stages, and user metadata consumed by
-    :class:`preprocessing_core.pipeline.PreprocessingPipeline`.
+    transform stages, and user metadata consumed by the preprocessing
+    pipeline.
 
     Attributes
     ----------
@@ -99,8 +99,7 @@ class PipelineConfig:
     post_split : list[TransformConfig]
         Transform steps applied after split datasets are materialized.
     metadata : dict[str, Any]
-        User-provided metadata copied into the final
-        :class:`preprocessing_core.datasets.DatasetBundle`.
+        User-provided metadata copied into the final DatasetBundle.
     config_path : str | None
         Source path for the parsed config, when available. The default is
         ``None``.
@@ -108,8 +107,8 @@ class PipelineConfig:
     Raises
     ------
     ConfigError
-        Raised by :meth:`validate` when the schema version, metadata, loader,
-        split policy, or transform-stage constraints are invalid.
+        Raised by validate() when the schema version, metadata, loader, split
+        policy, or transform-stage constraints are invalid.
     """
 
     version: int

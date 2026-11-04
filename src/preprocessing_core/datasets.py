@@ -51,8 +51,8 @@ class BaseDataset:
     Raises
     ------
     PipelineError
-        Raised by :meth:`validate` when data shape or aligned fields violate
-        the dataset contract.
+        Raised by validate() when data shape or aligned fields violate the
+        dataset contract.
     """
 
     data: np.ndarray

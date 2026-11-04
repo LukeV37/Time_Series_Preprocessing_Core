@@ -55,8 +55,7 @@ class PreprocessingPipeline:
     computes the train/validation/test split indices, materializes split
     datasets, and then applies split-specific transforms in deterministic
     ``train``, ``val``, ``test`` order. Fitted post-split transform state is
-    retained during the build and copied into the returned
-    :class:`preprocessing_core.datasets.DatasetBundle`.
+    retained during the build and copied into the returned DatasetBundle.
 
     Attributes
     ----------
@@ -72,14 +71,13 @@ class PreprocessingPipeline:
     post_split_steps : list[TransformStep]
         Resolved transform steps run after splitting.
     fitted_state : dict[str, dict[str, object]]
-        Mutable state captured for fitted post-split transforms during
-        :meth:`build`.
+        Mutable state captured for fitted post-split transforms during build().
 
     Raises
     ------
     PipelineError
-        Raised during :meth:`build` if loading or transforms fail, a callable
-        returns an invalid object, or fitted transform state cannot be serialized.
+        Raised during build() if loading or transforms fail, a callable returns
+        an invalid object, or fitted transform state cannot be serialized.
     """
 
     config: PipelineConfig
