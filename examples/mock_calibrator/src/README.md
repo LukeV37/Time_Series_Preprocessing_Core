@@ -57,7 +57,9 @@ The `feature_names` array in the `.npz` stores the feature names in order.
 The output archive also includes:
 
 - `timestamps`: shape `(T,)`
-- `anomaly_mask`: shape `(T, C)`, boolean mask where SNR anomalies were injected
+- `anomaly_mask`: shape `(T, C)`, combined boolean mask where SNR anomalies were injected
+- `single_channel_anomaly_mask`: shape `(T, C)`, boolean mask for single-channel anomalies
+- `group_anomaly_mask`: shape `(T, C)`, boolean mask for group anomalies
 - `channel_amplitude`: shape `(C,)`
 - `channel_frequency`: shape `(C,)`
 - `channel_phase`: shape `(C,)`
@@ -262,7 +264,7 @@ When one starts:
 duration = max(1, rng.poisson(group_duration_poisson_lambda))
 ```
 
-Single-channel and group anomalies can overlap. The saved `anomaly_mask` is boolean, so an affected point is either anomalous or not. Overlapping anomalies do not compound the SNR scale.
+Single-channel and group anomalies can overlap. The saved `single_channel_anomaly_mask` and `group_anomaly_mask` preserve each anomaly type, while `anomaly_mask` stores their combined boolean union. An affected point is either anomalous or not, so overlapping anomalies do not compound the SNR scale.
 
 ## Plotting
 
@@ -281,7 +283,7 @@ plot:
   channels: [0, 1, 2]
 ```
 
-This plots the selected channels over the configured index range.
+This plots the selected channels over the configured index range. If anomalies occur in the plotted channels, translucent rectangular spans highlight single-channel and group anomaly periods and add both event types to the legend.
 
 ## Parameter reference
 

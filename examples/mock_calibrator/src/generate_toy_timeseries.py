@@ -133,12 +133,13 @@ def make_clean_signal(
     return clean
 
 
-def make_anomaly_mask(
+def make_anomaly_masks(
     shape: tuple[int, int],
     config: AnomalyConfig,
     rng: np.random.Generator,
-) -> np.ndarray:
-    mask = np.zeros(shape, dtype=bool)
+) -> dict[str, np.ndarray]:
+    single_channel_mask = np.zeros(shape, dtype=bool)
+    group_mask = np.zeros(shape, dtype=bool)
     n_timesteps, n_channels = shape
     n_group_channels = max(1, round(n_channels * config.group_channel_fraction))
 
@@ -147,7 +148,7 @@ def make_anomaly_mask(
             rng.random(n_channels) < config.single_channel_probability
         )
         mark_anomaly(
-            mask,
+            single_channel_mask,
             index,
             single_channels,
             config.single_channel_duration_poisson_lambda,
@@ -157,14 +158,26 @@ def make_anomaly_mask(
         if rng.random() < config.group_probability:
             group_channels = rng.choice(n_channels, size=n_group_channels, replace=False)
             mark_anomaly(
-                mask,
+                group_mask,
                 index,
                 group_channels,
                 config.group_duration_poisson_lambda,
                 rng,
             )
 
-    return mask
+    return {
+        "single_channel_anomaly_mask": single_channel_mask,
+        "group_anomaly_mask": group_mask,
+        "anomaly_mask": single_channel_mask | group_mask,
+    }
+
+
+def make_anomaly_mask(
+    shape: tuple[int, int],
+    config: AnomalyConfig,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    return make_anomaly_masks(shape, config, rng)["anomaly_mask"]
 
 
 def mark_anomaly(
@@ -224,8 +237,8 @@ def generate_toy_timeseries(config: ToyTimeseriesConfig) -> dict[str, Any]:
     noise = make_noise(config, rng)
     noisy = clean + noise
     snr = compute_snr(clean, noise, config.snr.epsilon, config.snr.db, config.snr.window_radius)
-    anomaly_mask = make_anomaly_mask(snr.shape, config.anomaly, rng)
-    snr[anomaly_mask] *= config.anomaly.snr_scale
+    anomaly_masks = make_anomaly_masks(snr.shape, config.anomaly, rng)
+    snr[anomaly_masks["anomaly_mask"]] *= config.anomaly.snr_scale
 
     data = np.stack([clean, noise, noisy, snr], axis=-1)
     feature_names = [
@@ -240,7 +253,7 @@ def generate_toy_timeseries(config: ToyTimeseriesConfig) -> dict[str, Any]:
         "data": data,
         "feature_names": feature_names,
         "channel_params": channel_params,
-        "anomaly_mask": anomaly_mask,
+        **anomaly_masks,
     }
 
 
@@ -251,6 +264,8 @@ def save_npz(example: dict[str, Any], path: str | Path) -> None:
         timestamps=example["timestamps"],
         data=example["data"],
         anomaly_mask=example["anomaly_mask"],
+        single_channel_anomaly_mask=example["single_channel_anomaly_mask"],
+        group_anomaly_mask=example["group_anomaly_mask"],
         feature_names=np.array(example["feature_names"]),
         channel_amplitude=channel_params["amplitude"],
         channel_frequency=channel_params["frequency"],
@@ -262,16 +277,31 @@ def save_npz(example: dict[str, Any], path: str | Path) -> None:
 def save_plot(example: dict[str, Any], config: PlotConfig, path: str | Path) -> None:
     try:
         import matplotlib.pyplot as plt
+        from matplotlib.patches import Patch
     except ImportError as exc:
         raise ImportError("plotting requires matplotlib: pip install matplotlib") from exc
 
     timestamps = example["timestamps"][config.start_index : config.end_index]
     data = example["data"][config.start_index : config.end_index]
+    single_channel_mask = example["single_channel_anomaly_mask"][
+        config.start_index : config.end_index, config.channels
+    ]
+    group_mask = example["group_anomaly_mask"][config.start_index : config.end_index, config.channels]
 
     fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
     for channel in config.channels:
         axes[0].plot(timestamps, data[:, channel, 2], label=f"channel {channel}")
         axes[1].plot(timestamps, data[:, channel, 3], label=f"channel {channel}")
+
+    single_channel_color = "tab:orange"
+    group_color = "tab:red"
+    single_channel_intervals = mask_to_time_intervals(timestamps, single_channel_mask.any(axis=1))
+    group_intervals = mask_to_time_intervals(timestamps, group_mask.any(axis=1))
+    for axis in axes:
+        for start, end in single_channel_intervals:
+            axis.axvspan(start, end, facecolor=single_channel_color, alpha=0.18, edgecolor="none")
+        for start, end in group_intervals:
+            axis.axvspan(start, end, facecolor=group_color, alpha=0.18, edgecolor="none")
 
     axes[0].set_title("Detector response")
     axes[0].set_ylabel("amplitude")
@@ -279,13 +309,38 @@ def save_plot(example: dict[str, Any], config: PlotConfig, path: str | Path) -> 
     axes[1].set_xlabel("time")
     axes[1].set_ylabel(example["feature_names"][3])
 
+    anomaly_handles = []
+    if single_channel_intervals:
+        anomaly_handles.append(
+            Patch(facecolor=single_channel_color, alpha=0.18, label="single-channel anomaly")
+        )
+    if group_intervals:
+        anomaly_handles.append(Patch(facecolor=group_color, alpha=0.18, label="group anomaly"))
+
     for axis in axes:
-        axis.legend(loc="best")
+        handles, labels = axis.get_legend_handles_labels()
+        axis.legend(handles + anomaly_handles, labels + [handle.get_label() for handle in anomaly_handles], loc="upper right")
         axis.grid(True, alpha=0.3)
 
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
+
+
+def mask_to_time_intervals(timestamps: np.ndarray, mask: np.ndarray) -> list[tuple[float, float]]:
+    if len(timestamps) == 0 or len(mask) == 0:
+        return []
+
+    intervals = []
+    padded = np.concatenate(([False], mask, [False]))
+    starts = np.flatnonzero(~padded[:-1] & padded[1:])
+    ends = np.flatnonzero(padded[:-1] & ~padded[1:])
+    dt = float(np.median(np.diff(timestamps))) if len(timestamps) > 1 else 1.0
+
+    for start, end in zip(starts, ends, strict=True):
+        intervals.append((float(timestamps[start]), float(timestamps[end - 1] + dt)))
+
+    return intervals
 
 
 def main() -> None:
