@@ -13,23 +13,23 @@ not a realistic hardware simulator.
 - `toy_timeseries.npz` — generated NumPy archive, created when the script runs.
 - `toy_timeseries_plot.png` — generated plot, created when the script runs.
 - `loader.py` — custom example loader that converts the toy `.npz` file into a `BaseDataset`.
-- `register.py` — setup module that registers the custom loader as `toy_npz`.
-- `pipeline.yaml` — preprocessing config that selects `toy_npz`, built-in transforms, and the built-in `chronological` split.
+- `register.py` — setup module that registers the custom loader as `mock_calibrator_npz`.
+- `pipeline.yaml` — preprocessing config that selects `mock_calibrator_npz`, built-in transforms, and the built-in `chronological` split.
 
 ## Quick start
 
 From the repository root, generate the toy data:
 
 ```bash
-python examples/toy_calibrator/generate_toy_timeseries.py
+python examples/mock_calibrator/generate_toy_timeseries.py
 ```
 
 Then run the preprocessing pipeline:
 
 ```bash
 python scripts/run_experiment.py \
-  --config examples/toy_calibrator/pipeline.yaml \
-  --setup examples.toy_calibrator.register
+  --config examples/mock_calibrator/pipeline.yaml \
+  --setup examples.mock_calibrator.register
 ```
 
 Expected output:
@@ -47,26 +47,26 @@ The core framework is intentionally "batteries not included" for loaders. Custom
 This example does that with:
 
 ```bash
---setup examples.toy_calibrator.register
+--setup examples.mock_calibrator.register
 ```
 
-The generic runner imports that module and calls its `register()` function. The setup module registers `loader.py` as `toy_npz`, which is the loader name used in `pipeline.yaml`:
+The generic runner imports that module and calls its `register()` function. The setup module registers `loader.py` as `mock_calibrator_npz`, which is the loader name used in `pipeline.yaml`:
 
 ```yaml
 loader:
-  type: toy_npz
+  type: mock_calibrator_npz
 ```
 
 Multiple setup modules can be passed by repeating `--setup`, which lets separate packages register loaders, transforms, or split policies without changing the YAML schema.
 
-Built-in transforms are registered by the generic runner. This example uses `fill_nan` before splitting, then applies `repair_bollinger_outliers` to train/val only and `standard_scale` to train/val/test after fitting scaler state on train.
+Built-in transforms are registered by the generic runner. This example uses `fill_nan` before splitting, then applies `repair_rolling_outliers` to train/val only and `standard_scale` to train/val/test after fitting scaler state on train.
 
 ## Generate data only
 
 The generator script reads:
 
 ```text
-examples/toy_calibrator/config.yaml
+examples/mock_calibrator/config.yaml
 ```
 
 and writes output paths configured in that YAML.
@@ -392,7 +392,7 @@ plot:
 | `n_channels` | Number of channels, `C`. |
 | `dt` | Time spacing between samples. |
 | `seed` | Random seed for reproducible output. Use `null` for nondeterministic output. |
-| `output_path` | `.npz` output path. Relative paths are resolved under `examples/toy_calibrator/`. Use `null` to skip saving. |
+| `output_path` | `.npz` output path. Relative paths are resolved under `examples/mock_calibrator/`. Use `null` to skip saving. |
 
 ### `signal`
 
@@ -437,7 +437,7 @@ plot:
 
 | Parameter | Meaning |
 |---|---|
-| `output_path` | PNG output path. Relative paths are resolved under `examples/toy_calibrator/`. Use `null` to skip plotting. |
+| `output_path` | PNG output path. Relative paths are resolved under `examples/mock_calibrator/`. Use `null` to skip plotting. |
 | `start_index` | First timestep index to plot. |
 | `end_index` | Stop timestep index for plotting. Follows normal Python slicing, so this index is excluded. |
 | `channels` | Channel indices to draw in the plot. |
@@ -449,7 +449,7 @@ Example:
 ```python
 import numpy as np
 
-with np.load("examples/toy_calibrator/toy_timeseries.npz") as z:
+with np.load("examples/mock_calibrator/toy_timeseries.npz") as z:
     data = z["data"]
     timestamps = z["timestamps"]
     anomaly_mask = z["anomaly_mask"]

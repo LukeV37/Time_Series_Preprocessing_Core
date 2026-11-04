@@ -1,4 +1,4 @@
-"""Toy calibrator loader used by the example pipeline.
+"""Mock calibrator loader used by the example pipeline.
 
 This module is intentionally outside `preprocessing_core`. It demonstrates how
 an experiment or private package supplies its own loader and registers it with
@@ -15,8 +15,8 @@ from preprocessing_core.datasets import BaseDataset
 from preprocessing_core.validation import PipelineError
 
 
-def load_toy_npz(path: str | Path) -> BaseDataset:
-    """Load the generated toy calibrator `.npz` archive.
+def load_mock_calibrator_npz(path: str | Path) -> BaseDataset:
+    """Load the generated mock calibrator `.npz` archive.
 
     The toy archive is expected to contain:
 
@@ -36,7 +36,7 @@ def load_toy_npz(path: str | Path) -> BaseDataset:
             data=archive["data"],
             timestamps=archive["timestamps"] if "timestamps" in archive else None,
             feature_names=_load_feature_names(archive),
-            metadata={"source_format": "toy_npz", "source_path": str(path)},
+            metadata={"source_format": "mock_calibrator_npz", "source_path": str(path)},
         )
 
     dataset.validate()

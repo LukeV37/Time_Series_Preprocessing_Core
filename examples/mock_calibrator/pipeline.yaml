@@ -1,9 +1,9 @@
 version: 1
 
 loader:
-  type: toy_npz
+  type: mock_calibrator_npz
   params:
-    path: examples/toy_calibrator/toy_timeseries.npz
+    path: examples/mock_calibrator/toy_timeseries.npz
 
 pre_split:
   - name: fill_nan
@@ -16,11 +16,11 @@ split:
     ratios: [0.7, 0.15, 0.15]
 
 post_split:
-  - name: repair_bollinger_outliers
+  - name: repair_rolling_outliers
     apply: [train, val]
     params:
       window: 25
-      n_bands: 3.0
+      sigma: 3.0
       min_periods: 5
 
   - name: standard_scale
@@ -29,4 +29,4 @@ post_split:
     state_key: standard_scale
 
 metadata:
-  dataset_name: toy_calibrator
+  dataset_name: mock_calibrator
