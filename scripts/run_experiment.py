@@ -8,6 +8,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
 from preprocessing_core import load_dataset_bundle
 from preprocessing_core.splits import register_builtin_split_policies
 from preprocessing_core.transforms import register_builtin_transforms
