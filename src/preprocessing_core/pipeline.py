@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import copy
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
-from preprocessing_core.config import PipelineConfig, TransformConfig, load_config
+from preprocessing_core.config import PipelineConfig, TransformConfig
 from preprocessing_core.datasets import BaseDataset, DatasetBundle
 from preprocessing_core.registry import (
     Loader,
@@ -63,50 +63,35 @@ class PreprocessingPipeline:
     config : PipelineConfig
         Validated pipeline configuration describing the loader, split policy,
         transforms, and user metadata.
-    loader : Loader | None
-        Resolved loader callable. Set by :meth:`resolve`. The default is
-        ``None``.
-    split_policy : SplitPolicy | None
-        Resolved split policy callable. Set by :meth:`resolve`. The default is
-        ``None``.
-    pre_split_steps : list[TransformStep] | None
-        Resolved transform steps run before splitting. The default is ``None``.
-    post_split_steps : list[TransformStep] | None
-        Resolved transform steps run after splitting. The default is ``None``.
-    fitted_state : dict[str, dict[str, object]] | None
+    loader : Loader
+        Resolved loader callable.
+    split_policy : SplitPolicy
+        Resolved split policy callable.
+    pre_split_steps : list[TransformStep]
+        Resolved transform steps run before splitting.
+    post_split_steps : list[TransformStep]
+        Resolved transform steps run after splitting.
+    fitted_state : dict[str, dict[str, object]]
         Mutable state captured for fitted post-split transforms during
-        :meth:`build`. The default is ``None``.
+        :meth:`build`.
 
     Raises
     ------
     PipelineError
-        Raised during :meth:`build` if registered callables are unresolved,
-        loading or transforms fail, a callable returns an invalid object, or
-        fitted transform state cannot be initialized or serialized.
+        Raised during :meth:`build` if loading or transforms fail, a callable
+        returns an invalid object, or fitted transform state cannot be serialized.
     """
 
     config: PipelineConfig
-    loader: Loader | None = None
-    split_policy: SplitPolicy | None = None
-    pre_split_steps: list[TransformStep] | None = None
-    post_split_steps: list[TransformStep] | None = None
-    fitted_state: dict[str, dict[str, object]] | None = None
-
-    @classmethod
-    def from_yaml(cls, path: str) -> PreprocessingPipeline:
-        """Create a pipeline from a YAML config file.
-
-        Returns
-        -------
-        PreprocessingPipeline
-            Pipeline initialized from the parsed config with registered
-            callables resolved.
-        """
-        return cls.from_config(load_config(path))
+    loader: Loader
+    split_policy: SplitPolicy
+    pre_split_steps: list[TransformStep]
+    post_split_steps: list[TransformStep]
+    fitted_state: dict[str, dict[str, object]] = field(default_factory=dict)
 
     @classmethod
     def from_config(cls, config: PipelineConfig) -> PreprocessingPipeline:
-        """Create a pipeline from validated config and resolve registered callables.
+        """Create a fully resolved pipeline that is ready to build.
 
         Returns
         -------
@@ -115,16 +100,13 @@ class PreprocessingPipeline:
             policy, and transform callables.
         """
         config.validate()
-        pipeline = cls(config=config)
-        pipeline.resolve()
-        return pipeline
-
-    def resolve(self) -> None:
-        """Resolve configured loader, transforms, and split policy names."""
-        self.loader = get_loader(self.config.loader.type)
-        self.split_policy = get_split_policy(self.config.split.policy)
-        self.pre_split_steps = _resolve_transform_steps(self.config.pre_split, stage="pre_split")
-        self.post_split_steps = _resolve_transform_steps(self.config.post_split, stage="post_split")
+        return cls(
+            config=config,
+            loader=get_loader(config.loader.type),
+            split_policy=get_split_policy(config.split.policy),
+            pre_split_steps=_resolve_transform_steps(config.pre_split, stage="pre_split"),
+            post_split_steps=_resolve_transform_steps(config.post_split, stage="post_split"),
+        )
 
     def build(self) -> DatasetBundle:
         """Run the configured one-load preprocessing pipeline.
@@ -159,9 +141,6 @@ class PreprocessingPipeline:
 
     def _load_dataset(self) -> BaseDataset:
         """Load and validate the full dataset exactly once."""
-        if self.loader is None:
-            raise PipelineError("Pipeline loader has not been resolved")
-
         try:
             dataset = self.loader(**self.config.loader.params)
         except Exception as exc:
@@ -183,9 +162,6 @@ class PreprocessingPipeline:
 
     def _split_dataset(self, full: BaseDataset) -> dict[str, BaseDataset]:
         """Run the configured split policy and materialize split datasets."""
-        if self.split_policy is None:
-            raise PipelineError("Pipeline split policy has not been resolved")
-
         try:
             indices = self.split_policy(full, **self.config.split.params)
         except Exception as exc:
@@ -221,7 +197,6 @@ class PreprocessingPipeline:
                     step,
                     state=state,
                     fit=step.fit == split_name,
-                    split_name=split_name,
                 )
             if step.fit is not None:
                 validate_state_is_serializable(state, context=f"state for {step.label}")
@@ -234,20 +209,17 @@ class PreprocessingPipeline:
         *,
         state: dict[str, object],
         fit: bool,
-        split_name: str | None = None,
     ) -> BaseDataset:
         """Run one transform with validation and error context."""
         original_split = dataset.split
         original_data_tag = dataset.data_tag
-        context = _transform_context(step, split_name=split_name)
-
         try:
             result = step.fn(dataset, state=state, fit=fit, **step.params)
         except Exception as exc:
-            raise PipelineError(f"{context} failed") from exc
+            raise PipelineError(f"Transform {step.name!r} failed") from exc
 
         if not isinstance(result, BaseDataset):
-            raise PipelineError(f"{context} did not return BaseDataset")
+            raise PipelineError(f"Transform {step.name!r} did not return BaseDataset")
 
         result.split = original_split
         result.data_tag = original_data_tag
@@ -257,8 +229,6 @@ class PreprocessingPipeline:
 
     def _state_for_step(self, step: TransformStep) -> dict[str, object]:
         """Return the mutable state dict for one post-split transform step."""
-        if self.fitted_state is None:
-            raise PipelineError("Pipeline fitted state has not been initialized")
         if step.fit is None:
             return {}
         return self.fitted_state.setdefault(step.state_key, {})
@@ -293,10 +263,3 @@ def _resolve_transform_steps(configs: list[TransformConfig], *, stage: str) -> l
             )
         )
     return steps
-
-
-def _transform_context(step: TransformStep, *, split_name: str | None) -> str:
-    """Return a concise human-readable transform context."""
-    if split_name is None:
-        return f"{step.stage} transform {step.name!r}"
-    return f"{step.stage} transform {step.name!r} on split {split_name!r}"
