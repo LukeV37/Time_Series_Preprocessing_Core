@@ -6,14 +6,14 @@ The authoritative design lives in `plan/MINIMAL_PREPROCESSING_CORE_PLAN.md` whil
 
 ## Quick example
 
-The toy calibrator example shows the current intended workflow: experiment code registers a custom loader, YAML selects that registered loader plus built-in transforms and split policy, and the generic runner builds a `DatasetBundle`.
+The mock calibrator example shows the current intended workflow: experiment code registers a custom loader, YAML selects that registered loader plus built-in transforms and split policy, and the generic runner builds a `DatasetBundle`.
 
 ```bash
-python examples/toy_calibrator/generate_toy_timeseries.py
+python examples/mock_calibrator/generate_toy_timeseries.py
 
 python scripts/run_experiment.py \
-  --config examples/toy_calibrator/pipeline.yaml \
-  --setup examples.toy_calibrator.register
+  --config examples/mock_calibrator/pipeline.yaml \
+  --setup examples.mock_calibrator.register
 ```
 
-See `examples/toy_calibrator/README.md` for the full example notes.
+See `examples/mock_calibrator/README.md` for the full example notes.
